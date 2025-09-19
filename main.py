@@ -1,31 +1,47 @@
+import gradio as gr
 from transformers import pipeline
 
-# Cargar el pipeline de "ner" (Named Entity Recognition) con el modelo en español
+# Cargar el pipeline de "ner" (Named Entity Recognition) una sola vez
 print("Cargando el modelo NER...")
 ner_pipeline = pipeline(
     "ner",
     model="mrm8488/bert-spanish-cased-finetuned-ner",
-    grouped_entities=True # Agrupa partes de una entidad
+    grouped_entities=True  # Agrupa partes de una entidad
 )
 print("¡Modelo cargado!")
 
-texto = (
-    "La Dra. Elena García, una reconocida científica del Instituto Cervantes, presentó los resultados de" 
-    "su última investigación en una conferencia internacional celebrada en Kioto, Japón. Su estudio," 
-    "financiado en parte por la Unión Europea, analiza el impacto de la tecnología desarrollada por la"
-    "empresa alemana Siemens en las economías emergentes de Sudamérica. Al evento asistieron personalidades"
-    "como el economista jefe del Banco Mundial, David Malpass, y varios representantes de la ONU."
-    "La investigación, que comenzó en el verano de 2023, utilizó datos satelitales proporcionados por la"
-    "NASA para monitorear los cambios en la región andina. Los hallazgos, publicados en la revista científica"
-    "'Nature', sugieren una nueva era de desarrollo industrial para países como Perú y Colombia." 
+# 1. Define una función que procese el texto de entrada
+def encontrar_entidades(texto):
+    """
+    Esta función toma un texto como entrada, utiliza el pipeline de NER para
+    encontrar entidades y devuelve los resultados formateados como un string.
+    """
+    if not texto:
+        return "Por favor, ingresa un texto para analizar."
+    
+    print("\nAnalizando el texto para encontrar entidades...")
+    entidades = ner_pipeline(texto)
+    
+    # Formatear la salida para que sea legible
+    resultados = ""
+    if not entidades:
+        return "No se encontraron entidades en el texto."
+        
+    for entidad in entidades:
+        resultados += f"Texto: '{entidad['word']}'\n"
+        resultados += f"Categoría: {entidad['entity_group']} (Confianza: {entidad['score']:.2f})\n\n"
+    
+    return resultados
+
+# 2. Crea la interfaz de Gradio
+iface = gr.Interface(
+    fn=encontrar_entidades,  # La función que se ejecutará
+    inputs=gr.Textbox(lines=10, placeholder="Escribe o pega aquí el texto que quieres analizar..."),
+    outputs=gr.Textbox(label="Entidades Encontradas"),
+    title="🔎 Reconocimiento de Entidades Nombradas (NER)",
+    description="Este modelo identifica personas, organizaciones, lugares y otras entidades en texto en español. Está basado en 'mrm8488/bert-spanish-cased-finetuned-ner'."
 )
 
-# Extraer las entidades del texto
-print("\nAnalizando el texto para encontrar entidades...")
-entidades = ner_pipeline(texto)
-
-# Imprimir los resultados de una forma clara
-print("\n--- ENTIDADES ENCONTRADAS ---\n")
-for entidad in entidades:
-    print(f"Texto: '{entidad['word']}'")
-    print(f"Categoría: {entidad['entity_group']} (Confianza: {entidad['score']:.2f})\n")
+# 3. Lanza la interfaz
+print("Lanzando la interfaz de Gradio...")
+iface.launch()
