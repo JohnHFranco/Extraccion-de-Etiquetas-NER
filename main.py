@@ -9,14 +9,6 @@ ner_pipeline = pipeline(
 )
 print("¡Modelo cargado!")
 
-# El texto que quieres analizar
-# texto = (
-#     "El CEO de Tesla, Elon Musk, anunció una nueva inversión para SpaceX en el estado de Nuevo León, México." 
-#     "La noticia fue confirmada por el presidente Andrés Manuel López Obrador durante su conferencia en"
-#     "la Ciudad de México el pasado mes de marzo. Se espera que esta colaboración con el Gobierno de México"
-#     "genere miles de empleos en la región norte del país."
-# )
-
 texto = (
     "La Dra. Elena García, una reconocida científica del Instituto Cervantes, presentó los resultados de" 
     "su última investigación en una conferencia internacional celebrada en Kioto, Japón. Su estudio," 
