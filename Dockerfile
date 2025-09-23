@@ -8,11 +8,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 4. Copiar el resto del código de la aplicación
+# 4. Copiar el resto del código Y el script de inicio
 COPY main.py .
+COPY start.sh .
 
-# 5. Exponer el puerto en el que corre Gradio
+# 5. Exponer el puerto
 EXPOSE 7860
 
-# 6. Comando para iniciar la aplicación
-CMD ["python", "main.py"]
+# 6. Comando para iniciar la aplicación usando el script
+CMD ["./start.sh"]

@@ -1,0 +1,19 @@
+# Ignorar el repositorio de Git
+.git/
+
+# Ignorar el entorno virtual
+.venv/
+venv/
+env/
+
+# Archivos de caché de Python
+__pycache__/
+
+# Archivos de configuración del editor
+.vscode/
+.idea/
+
+# No necesitamos estos archivos de texto dentro de la imagen
+README.md
+.gitignore
+.dockerignore
