@@ -9,7 +9,7 @@ WORKDIR /app
 # Usamos el index-url específico para builds de CPU.
 RUN python -m pip install --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cpu \
-    torch==2.3.1 torchvision torchaudio
+    torch==2.6.0 torchvision torchaudio
 
 # 3. Instalar PyTorch para GPU (CUDA 12.8)
 # RUN python -m pip install --no-cache-dir \
