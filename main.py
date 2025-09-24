@@ -1,14 +1,18 @@
 import gradio as gr
 from transformers import pipeline
+import os
+
+# Lee el ID del modelo desde la variable de entorno definida en start.sh
+model_id = os.getenv("MODEL_ID", "mrm8488/bert-spanish-cased-finetuned-ner")
 
 # Cargar el pipeline de "ner" (Named Entity Recognition) una sola vez
 print("Cargando el modelo NER...")
 ner_pipeline = pipeline(
     "ner",
-    model="mrm8488/bert-spanish-cased-finetuned-ner",
-    grouped_entities=True  # Agrupa partes de una entidad
+    model=model_id,
+    grouped_entities=True
 )
-print("¡Modelo cargado!")
+print(f"¡Modelo '{model_id}' cargado!")
 
 # 1. Define una función que procese el texto de entrada
 def encontrar_entidades(texto):
