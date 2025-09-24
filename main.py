@@ -44,4 +44,4 @@ iface = gr.Interface(
 
 # 3. Lanza la interfaz
 print("Lanzando la interfaz de Gradio...")
-iface.launch()
+iface.launch(server_name="0.0.0.0")
