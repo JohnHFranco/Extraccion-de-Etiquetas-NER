@@ -1,0 +1,57 @@
+# Nombre del workflow
+name: Publicar Imagen de Docker
+
+# 1. DISPARADOR: Se activa solo al subir un tag con el formato vX.Y.Z
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+# Trabajos que se ejecutarán
+jobs:
+  build-and-push:
+    # Usar un servidor de Ubuntu
+    runs-on: ubuntu-latest
+    
+    # Secuencia de pasos
+    steps:
+      # 2. CLONAR EL CÓDIGO: Descarga tu repositorio
+      - name: Clonar el repositorio
+        uses: actions/checkout@v4
+
+      # 3. CONFIGURAR BUILDX: Prepara el entorno de construcción moderno de Docker
+      - name: Configurar QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 4. INICIAR SESIÓN: Conéctate a Docker Hub usando los secrets de GitHub
+      - name: Iniciar sesión en Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 5. EXTRAER METADATOS: Genera las etiquetas de Docker automáticamente a partir del tag de Git
+      - name: Extraer metadatos (etiquetas y labels)
+        id: meta # Le damos un ID a este paso para usar sus salidas más adelante
+        uses: docker/metadata-action@v5
+        with:
+          # El nombre de tu imagen en Docker Hub
+          images: johnhfranco2824/extraccion-de-etiquetas-ner
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # 6. CONSTRUIR Y SUBIR: Usa los metadatos generados para construir y subir la imagen
+      - name: Construir y subir la imagen a Docker Hub
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          # Aquí podrías añadir más plataformas si lo necesitaras, ej: linux/amd64,linux/arm64
+          platforms: linux/amd64
+          # Usa las etiquetas generadas en el paso 'meta'
+          tags: ${{ steps.meta.outputs.tags }}
+          # Usa los labels generados en el paso 'meta'
+          labels: ${{ steps.meta.outputs.labels }}
