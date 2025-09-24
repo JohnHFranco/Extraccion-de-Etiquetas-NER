@@ -1,45 +1,56 @@
 #!/usr/bin/env bash
-# Modo seguro: el script se detendrá si un comando falla.
 set -euo pipefail
 
-echo "Iniciando el proceso de release..."
+# --- 1. Verificación de Credenciales ---
+# El script se detendrá si la variable GITHUB_TOKEN no está definida.
+: "${GITHUB_TOKEN:?La variable de entorno GITHUB_TOKEN no está definida. Asegúrate de haberla guardado en tu ~/.bashrc}"
 
-# -------- BLOQUE DE VERIFICACIÓN ---------
-# Detectar si hay cambios sin commitear en el directorio de trabajo
+# --- 2. Configuración de Credenciales Temporales ---
+echo "🔑 Configurando credenciales temporales para Git..."
+# Limpiar cualquier configuración de credenciales previa para evitar conflictos.
+git config --global --unset-all credential.helper || true
+# Crear un archivo temporal seguro para las credenciales.
+CREDS_FILE=$(mktemp)
+# Configurar Git para que use este archivo.
+git config --global credential.helper "store --file ${CREDS_FILE}"
+# Escribir el token en el archivo. Se usa "x-access-token" como nombre de usuario genérico para tokens.
+printf "https://%s:%s@github.com\n" "x-access-token" "$GITHUB_TOKEN" > "$CREDS_FILE"
+
+# --- 3. Limpieza Automática (Garantizada) ---
+# La función 'cleanup' se ejecutará al salir del script (ya sea por éxito, error o Ctrl+C).
+cleanup() {
+  echo "🧹 Limpiando credenciales temporales..."
+  rm -f "${CREDS_FILE}"
+  git config --global --unset-all credential.helper
+}
+trap cleanup EXIT
+
+# --- Lógica de Release (el resto de tu script) ---
+echo "✅ Iniciando el proceso de release..."
 if [[ -n "$(git status --porcelain)" ]]; then
-  echo "Error: Tienes cambios locales sin guardar (uncommitted)."
-  echo "Por favor, haz 'git commit' antes de crear una nueva versión."
+  echo "❌ Error: Tienes cambios locales sin guardar (uncommitted)."
   exit 1
 fi
-# -----------------------------------------
 
-# 1. Asegurarse de tener los últimos tags de GitHub
-echo "Sincronizando tags con el repositorio remoto..."
+echo "🔄 Sincronizando tags con el repositorio remoto..."
 git fetch origin --tags
 
-# 2. Calcular la siguiente versión
-# Busca el último tag en la rama lab. Si no hay, empieza en v0.1.0
-LAST_TAG=$(git describe --tags --abbrev=0 origin/lab 2>/dev/null || echo "v0.0.0")
+LAST_TAG=$(git tag --list 'v*.*.*' | sort -V | tail -n 1 2>/dev/null || echo "v0.0.0")
 BASE_NUM=${LAST_TAG#v}
 IFS='.' read -r MAJOR MINOR PATCH <<<"$BASE_NUM"
 NEW_PATCH=$((PATCH + 1))
 NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
 
-# 3. Mostrar un resumen y pedir confirmación
 echo ""
-echo "   Preparando nueva versión:"
-echo "   Última versión encontrada en 'lab': $LAST_TAG"
-echo "   Nueva versión a crear:            $NEW_TAG"
+echo "🚀 Preparando nueva versión:"
+echo "   Última versión encontrada: $LAST_TAG"
+echo "   Nueva versión a crear:     $NEW_TAG"
 echo ""
-read -rp "¿Proceder a crear y subir la etiqueta? (y/n): " OK
-[[ "$OK" == "y" ]] || { echo "Cancelado por el usuario."; exit 1; }
+read -rp "❓ ¿Proceder a crear y subir la etiqueta? (y/n): " OK
+[[ "$OK" == "y" ]] || { echo "❌ Cancelado por el usuario."; exit 1; }
 
-# 4. Crear y subir la nueva etiqueta de Git
-echo "Creando etiqueta $NEW_TAG..."
+echo "🏷️  Creando etiqueta $NEW_TAG..."
 git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
-
-echo "Subiendo etiqueta $NEW_TAG a GitHub..."
+echo "📤 Subiendo etiqueta $NEW_TAG a GitHub (usando credenciales temporales)..."
 git push origin "$NEW_TAG"
-
-echo "¡Release completado! La etiqueta $NEW_TAG ha sido subida."
-echo "Revisa la pestaña 'Actions' en tu repositorio de GitHub para ver el workflow en ejecución."
+echo "🎉 ¡Release completado!"
