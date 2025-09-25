@@ -17,3 +17,11 @@ __pycache__/
 README.md
 .gitignore
 .dockerignore
+
+# Herramientas de desarrollo y CI/CD que no necesita la aplicación
+release.sh
+git-release.sh
+.gitattributes
+docker-compose.yml
+docker.yaml
+.github/
