@@ -12,9 +12,7 @@ RUN addgroup --system appuser && adduser --system --ingroup appuser appuser
 WORKDIR /app
 
 # 3. Instalar PyTorch para GPU (CUDA 12.8)
-RUN python -m pip install --no-cache-dir \
-    --index-url https://download.pytorch.org/whl/cu128 \
-    torch==2.3.1 torchvision torchaudio
+RUN python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu128 torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0
 
 # 4. Instalar dependencias
 COPY requirements.txt .
