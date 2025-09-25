@@ -24,6 +24,11 @@ COPY start.sh .
 
 RUN chmod +x ./start.sh
 
+# Crear el directorio de caché y asignar 'appuser' como propietario
+RUN mkdir -p /app/.cache && \
+    chown -R appuser:appuser /app/.cache
+# -------------------------
+
 # Cambiar el propietario de los archivos a 'appuser'
 RUN chown -R appuser:appuser /app
 # Cambiar al nuevo usuario
