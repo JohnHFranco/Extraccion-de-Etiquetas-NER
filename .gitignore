@@ -12,3 +12,19 @@ __pycache__/
 # Carpetas de editores de código
 .vscode/
 .idea/
+
+# Archivos de entorno con secretos
+.env
+.env.*
+
+# Archivos de registro (logs)
+*.log
+logs/
+
+# Datos pesados o datasets
+data/
+*.csv
+*.jsonl
+
+# Caché local de Hugging Face (si alguna vez corres fuera de Docker)
+.cache/
