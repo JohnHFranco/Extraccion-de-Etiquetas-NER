@@ -10,7 +10,7 @@ print("Cargando el modelo NER...")
 ner_pipeline = pipeline(
     "ner",
     model=model_id,
-    grouped_entities=True
+    aggregation_strategy="simple"
 )
 print(f"¡Modelo '{model_id}' cargado!")
 
