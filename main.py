@@ -24,7 +24,7 @@ logging.info(f"¡Modelo '{model_id}' cargado!")
 
 # --- 2. Función de Ayuda para Segmentar Texto ---
 
-def segment_text(text, tokenizer, max_tokens=510):
+def segment_text(text, tokenizer, max_tokens=500):
     """
     Divide el texto en fragmentos que no excedan max_tokens según el tokenizador.
     Devuelve una lista de strings (los fragmentos) y el conteo total de tokens.
