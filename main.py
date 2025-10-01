@@ -9,47 +9,27 @@ import plotly.graph_objects as go
 
 # --- 1. Configuración Inicial ---
 
-# Configuración del logging para ver el estado y los errores en la consola de Docker
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Lee el ID del modelo desde la variable de entorno (definida en start.sh)
 model_id = os.getenv("MODEL_ID", "mrm8488/bert-spanish-cased-finetuned-ner")
 
-# Cargar el pipeline de "ner" (Named Entity Recognition) una sola vez al iniciar
 logging.info(f"Cargando el modelo NER: {model_id}...")
-ner_pipeline = pipeline(
-    "ner",
-    model=model_id,
-    aggregation_strategy="simple" # Parámetro actualizado para agrupar entidades
-)
+ner_pipeline = pipeline("ner", model=model_id, aggregation_strategy="simple")
 logging.info(f"¡Modelo '{model_id}' cargado!")
 
 
 # --- 2. Función de Ayuda para Segmentar Texto ---
 
-def segment_text(text, tokenizer, max_tokens=500): # Reducido a 500 por el error 514 vs 512
-    """
-    Divide el texto en fragmentos que no excedan max_tokens según el tokenizador.
-    Devuelve una lista de strings (los fragmentos) y el conteo total de tokens.
-    """
-    # Convierte todo el texto a una secuencia de IDs de tokens
+def segment_text(text, tokenizer, max_tokens=500):
     input_ids = tokenizer(text, return_tensors="pt").input_ids[0]
     total_tokens = len(input_ids)
-    
     segments = []
     start = 0
-    
-    # Recorre la secuencia de IDs y la corta en fragmentos
     while start < total_tokens:
         end = min(start + max_tokens, total_tokens)
         segment_ids = input_ids[start:end]
-        
-        # Convierte los IDs del fragmento de vuelta a texto
         segment_text = tokenizer.decode(segment_ids, skip_special_tokens=True)
         segments.append(segment_text)
-        
         start = end
-        
     logging.info(f"Texto segmentado en {len(segments)} chunk(s) para un total de {total_tokens} tokens.")
     return segments, total_tokens
 
@@ -60,48 +40,40 @@ def encontrar_entidades(texto):
     start_time = time.time()
     logging.info("Iniciando análisis de entidades...")
 
-    # Inicializar salidas en caso de error o texto vacío
-    resumen_metricas = "--- Métricas ---\n" \
-                       "⏱️ Tiempo de Respuesta: N/A\n" \
-                       "🎟️ Tokens de Entrada: N/A\n" \
-                       "🏷️ Tokens de Salida (Entidades): N/A\n" \
-                       "🎯 Confianza Promedio: N/A\n" \
-                       "----------------\n\n"
-    grafico_salida = go.Figure().add_annotation(text="No hay datos para el gráfico.", showarrow=False) # Gráfico vacío
-    entidades_por_categoria = {
-        "PER": "No se encontraron Personas.",
-        "ORG": "No se encontraron Organizaciones.",
-        "LOC": "No se encontraron Ubicaciones.",
-        "MISC": "No se encontraron Misceláneos."
-    }
-    resultados_raw = "No se encontraron entidades o hubo un error."
-
+    # --- CORRECCIÓN 1: Inicializar todas las variables de salida por defecto ---
+    grafico_vacio = go.Figure().add_annotation(text="No hay datos para el gráfico.", showarrow=False)
+    metricas_vacias = "--- Métricas ---\n" \
+                      "⏱️ Tiempo de Respuesta: N/A\n" \
+                      "🎟️ Tokens de Entrada: N/A\n" \
+                      "🏷️ Tokens de Salida (Entidades): N/A\n" \
+                      "🎯 Confianza Promedio: N/A\n" \
+                      "----------------\n\n"
+    salidas_vacias = (
+        "No se encontraron Personas.",
+        "No se encontraron Organizaciones.",
+        "No se encontraron Ubicaciones.",
+        "No se encontraron Misceláneos."
+    )
 
     if not texto:
         logging.warning("Se recibió una entrada de texto vacía.")
-        return resumen_metricas, grafico_salida, entidades_por_categoria["PER"], \
-               entidades_por_categoria["ORG"], entidades_por_categoria["LOC"], \
-               entidades_por_categoria["MISC"], resultados_raw
-    
+        return metricas_vacias, grafico_vacio, *salidas_vacias
+
     # Filtro inicial para textos excesivamente largos
     LIMITE_PALABRAS = 2000
     conteo_palabras = len(texto.split())
     if conteo_palabras > LIMITE_PALABRAS:
         logging.warning(f"El texto de entrada ({conteo_palabras} palabras) excede el límite de {LIMITE_PALABRAS} palabras.")
-        return "⚠️ ADVERTENCIA: El texto ingresado es demasiado largo " \
-               f"({conteo_palabras} palabras).\nPor favor, reduce el texto a " \
-               f"menos de {LIMITE_PALABRAS} palabras.", grafico_salida, \
-               entidades_por_categoria["PER"], entidades_por_categoria["ORG"], \
-               entidades_por_categoria["LOC"], entidades_por_categoria["MISC"], resultados_raw
+        # --- CORRECCIÓN 2: Devolver el número correcto de valores ---
+        mensaje_advertencia = f"⚠️ ADVERTENCIA: El texto ingresado es demasiado largo ({conteo_palabras} palabras).\n" \
+                              f"Por favor, reduce el texto a menos de {LIMITE_PALABRAS} palabras."
+        return mensaje_advertencia, grafico_vacio, *salidas_vacias
 
     entidades_totales = []
-    
     try:
-        # Segmenta el texto en fragmentos (chunks) usando el tokenizador del modelo
         tokenizador = ner_pipeline.tokenizer
         chunks_de_texto, tokens_entrada_total = segment_text(texto, tokenizador)
         
-        # Procesa cada fragmento por separado
         for chunk in chunks_de_texto:
             entidades = ner_pipeline(chunk)
             if entidades:
@@ -109,14 +81,49 @@ def encontrar_entidades(texto):
 
         end_time = time.time()
         tiempo_respuesta = end_time - start_time
+        
+        if not entidades_totales:
+            logging.info("Análisis completado. No se encontraron entidades.")
+            return metricas_vacias, grafico_vacio, *salidas_vacias
 
-        # Calcula las métricas con los resultados totales
+        # --- LÓGICA DE AGRUPACIÓN Y GRÁFICO ---
+        df_todas_entidades = pd.DataFrame(entidades_totales)
+        conteo_categorias = df_todas_entidades['entity_group'].value_counts().reset_index()
+        conteo_categorias.columns = ['Categoría', 'Ocurrencias']
+        
+        grafico_salida = px.pie(
+            conteo_categorias,
+            values='Ocurrencias',
+            names='Categoría',
+            title='Distribución de Entidades Encontradas',
+            hole=0.4,
+            color_discrete_map={'PER': '#636EFA', 'ORG': '#00CC96', 'LOC': '#EF553B', 'MISC': '#AB63FA'}
+        )
+        grafico_salida.update_traces(textposition='inside', textinfo='percent+label', marker=dict(line=dict(color='#000000', width=2)))
+        grafico_salida.update_layout(showlegend=False)
+
+        entidades_unicas = {}
+        for entidad in entidades_totales:
+            key = (entidad['word'].lower(), entidad['entity_group'])
+            if key not in entidades_unicas:
+                entidades_unicas[key] = entidad
+
+        df_unicas = pd.DataFrame(list(entidades_unicas.values()))
+        
+        entidades_por_categoria = {}
+        for categoria in ['PER', 'ORG', 'LOC', 'MISC']:
+            sub_df = df_unicas[df_unicas['entity_group'] == categoria]
+            if not sub_df.empty:
+                lista_entidades = "\n".join(sorted([f"- {row['word']}" for _, row in sub_df.iterrows()]))
+                entidades_por_categoria[categoria] = lista_entidades
+            else:
+                entidades_por_categoria[categoria] = f"No se encontraron entidades de tipo '{categoria}'."
+
         tokens_salida = sum(len(tokenizador.tokenize(e['word'])) for e in entidades_totales)
-        confianza_promedio = sum(e['score'] for e in entidades_totales) / len(entidades_totales) if entidades_totales else 0
+        confianza_promedio = sum(e['score'] for e in entidades_totales) / len(entidades_totales)
 
         logging.info(f"Análisis completado en {tiempo_respuesta:.2f} segundos. Entidades encontradas: {len(entidades_totales)}")
 
-        # --- PREPARACIÓN DE MÉTRICAS Y RESULTADOS ---
         resumen_metricas = (
             f"--- Métricas ---\n"
             f"⏱️ Tiempo de Respuesta: {tiempo_respuesta:.2f} segundos\n"
@@ -125,92 +132,57 @@ def encontrar_entidades(texto):
             f"🎯 Confianza Promedio: {confianza_promedio:.2%}\n"
             f"----------------\n\n"
         )
-
-        resultados_raw = ""
-        if not entidades_totales:
-            resultados_raw = "No se encontraron entidades en el texto."
-            grafico_salida = go.Figure().add_annotation(text="No hay entidades para el gráfico.", showarrow=False)
-        else:
-            # Lógica para eliminar duplicados y preservar el orden original del texto
-            entidades_vistas = set()
-            entidades_unicas_ordenadas = []
-            
-            for entidad in sorted(entidades_totales, key=lambda x: x['start']):
-                # Usamos una tupla con atributos clave para identificar duplicados
-                identificador_entidad = (entidad['word'], entidad['entity_group'], entidad['start'], entidad['end'])
-                if identificador_entidad not in entidades_vistas:
-                    entidades_unicas_ordenadas.append(entidad)
-                    entidades_vistas.add(identificador_entidad)
-            
-            # --- Generar Gráfico y Detalles por Categoría ---
-            df_entidades = pd.DataFrame(entidades_unicas_ordenadas)
-            
-            # Gráfico de pastel de categorías
-            conteo_categorias = df_entidades['entity_group'].value_counts().reset_index()
-            conteo_categorias.columns = ['Categoría', 'Cantidad']
-            grafico_salida = px.pie(
-                conteo_categorias,
-                values='Cantidad',
-                names='Categoría',
-                title='Distribución de Entidades por Categoría',
-                hole=0.3 # Hace un gráfico de donut
-            )
-            grafico_salida.update_traces(textposition='inside', textinfo='percent+label')
-
-            # Detalles por categoría
-            entidades_por_categoria = {
-                "PER": "No se encontraron Personas.",
-                "ORG": "No se encontraron Organizaciones.",
-                "LOC": "No se encontraron Ubicaciones.",
-                "MISC": "No se encontraron Misceláneos."
-            }
-
-            for categoria in df_entidades['entity_group'].unique():
-                sub_df = df_entidades[df_entidades['entity_group'] == categoria]
-                lista_entidades = "\n".join([f"- '{row['word']}' (Confianza: {row['score']:.2%})" for _, row in sub_df.iterrows()])
-                entidades_por_categoria[categoria] = f"--- {categoria} ({len(sub_df)}) ---\n" + lista_entidades + "\n"
-
-            # Resultados brutos (todas las entidades listadas como antes)
-            for entidad in entidades_unicas_ordenadas:
-                resultados_raw += f"Texto: '{entidad['word']}'\n"
-                resultados_raw += f"Categoría: {entidad['entity_group']} (Confianza: {entidad['score']:.2%})\n\n"
         
-        # Devuelve todas las salidas separadas
-        return resumen_metricas, grafico_salida, \
-               entidades_por_categoria.get("PER", "No se encontraron Personas."), \
-               entidades_por_categoria.get("ORG", "No se encontraron Organizaciones."), \
-               entidades_por_categoria.get("LOC", "No se encontraron Ubicaciones."), \
-               entidades_por_categoria.get("MISC", "No se encontraron Misceláneos."), \
-               resultados_raw
+        return resumen_metricas, grafico_salida, entidades_por_categoria["PER"], \
+               entidades_por_categoria["ORG"], entidades_por_categoria["LOC"], \
+               entidades_por_categoria["MISC"]
 
     except Exception as e:
         logging.error(f"Ocurrió un error al procesar el texto: {e}", exc_info=True)
-        # En caso de error, devuelve los mensajes de error en los campos correspondientes
         error_msg = "Error: La aplicación encontró un problema inesperado al procesar el texto."
-        return error_msg, grafico_salida, entidades_por_categoria["PER"], \
-               entidades_por_categoria["ORG"], entidades_por_categoria["LOC"], \
-               entidades_por_categoria["MISC"], error_msg
-
+        return error_msg, grafico_vacio, *salidas_vacias
 
 # --- 4. Creación y Lanzamiento de la Interfaz con Múltiples Salidas ---
+theme = gr.themes.Base(
+    primary_hue=gr.themes.colors.blue,
+    secondary_hue=gr.themes.colors.blue,
+    neutral_hue=gr.themes.colors.slate,
+    font=[gr.themes.GoogleFont("IBM Plex Mono"), "monospace", "sans-serif"],
+).set(
+    body_background_fill="#111827",
+    body_background_fill_dark="#111827",
+    body_text_color="#d1d5db",
+    body_text_color_dark="#d1d5db",
+    button_primary_background_fill="#3b82f6",
+    button_primary_background_fill_dark="#3b82f6",
+    button_primary_text_color="#ffffff",
+    button_primary_text_color_dark="#ffffff",
+    background_fill_primary="#1f2937",
+    background_fill_primary_dark="#1f2937",
+    block_background_fill="#374151",
+    block_background_fill_dark="#374151",
+    block_label_background_fill="#1f2937",
+    block_label_background_fill_dark="#1f2937",
+    block_title_text_color="*primary_500",
+    block_title_text_color_dark="*primary_500",
+)
 
-# Definimos los componentes de salida. ¡Ahora hay 7!
 output_components = [
-    gr.Textbox(label="📊 Métricas de Procesamiento", lines=5, interactive=False),
-    gr.Plot(label="📈 Distribución de Entidades por Categoría"),
-    gr.Textbox(label="👤 Entidades: Personas (PER)", lines=5, interactive=False),
-    gr.Textbox(label="🏢 Entidades: Organizaciones (ORG)", lines=5, interactive=False),
-    gr.Textbox(label="📍 Entidades: Ubicaciones (LOC)", lines=5, interactive=False),
-    gr.Textbox(label="🏷️ Entidades: Misceláneas (MISC)", lines=5, interactive=False),
-    gr.Textbox(label="📝 Todas las Entidades Encontradas (Raw)", lines=10, interactive=False)
+    gr.Textbox(label="📊 Processing Metrics", lines=5, interactive=False),
+    gr.Plot(label="📈 Entity Distribution by Category"),
+    gr.Textbox(label="👤 Persons (PER)", lines=5, interactive=False),
+    gr.Textbox(label="🏢 Organizations (ORG)", lines=5, interactive=False),
+    gr.Textbox(label="📍 Locations (LOC)", lines=5, interactive=False),
+    gr.Textbox(label="🏷️ Miscellaneous (MISC)", lines=5, interactive=False),
 ]
 
 iface = gr.Interface(
     fn=encontrar_entidades,
-    inputs=gr.Textbox(lines=10, placeholder="Escribe o pega aquí el texto que quieres analizar...", label="Texto de Entrada"),
-    outputs=output_components, # Asignamos la lista de componentes de salida
-    title="🔎 Reconocimiento de Entidades Nombradas (NER) en Español",
-    description="Este modelo identifica personas (PER), organizaciones (ORG), ubicaciones (LOC) y otras entidades misceláneas (MISC) en texto en español. Soporta textos largos y muestra métricas y visualizaciones detalladas."
+    inputs=gr.Textbox(lines=10, placeholder="Enter or paste the text you want to analyze here...", label="Input Text"),
+    outputs=output_components,
+    title="Named Entity Recognition (NER) Extractor",
+    description="This model identifies persons (PER), organizations (ORG), locations (LOC), and other miscellaneous entities (MISC) in Spanish text. It supports long texts and displays detailed metrics and visualizations.",
+    theme=theme
 )
 
 logging.info("Lanzando la interfaz de Gradio...")
