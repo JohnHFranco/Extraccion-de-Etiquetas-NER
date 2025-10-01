@@ -42,13 +42,14 @@ def encontrar_entidades(texto):
 
     # Valores de salida por defecto
     grafico_vacio = go.Figure().add_annotation(text="No data for chart.", showarrow=False)
-    metricas_vacias = "--- Processing Metrics ---\n" \
-                      "⏱️ Response Time: N/A\n" \
-                      "🎟️ Input Tokens: N/A\n" \
-                      "🏷️ Output Tokens (Entities): N/A\n" \
-                      "🎯 Average Confidence: N/A\n" \
+    grafico_vacio.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+    metricas_vacias = "--- Métricas de Procesamiento ---\n" \
+                      "⏱️ Tiempo de Respuesta: N/A\n" \
+                      "🎟️ Tokens de Entrada: N/A\n" \
+                      "🏷️ Tokens de Salida (Entidades): N/A\n" \
+                      "🎯 Confianza Promedio: N/A\n" \
                       "----------------\n\n"
-    salidas_vacias = ("No Persons found.", "No Organizations found.", "No Locations found.", "No Miscellaneous found.")
+    salidas_vacias = ("No se encontraron Personas.", "No se encontraron Organizaciones.", "No se encontraron Ubicaciones.", "No se encontraron Misceláneos.")
 
     if not texto:
         logging.warning("Se recibió una entrada de texto vacía.")
@@ -71,33 +72,40 @@ def encontrar_entidades(texto):
             logging.info("Análisis completado. No se encontraron entidades.")
             return metricas_vacias, grafico_vacio, *salidas_vacias
 
-        # --- LÓGICA MEJORADA DE GRÁFICO Y AGRUPACIÓN ---
-        
-        # 1. Crear un DataFrame con TODAS las entidades encontradas
         df_todas_entidades = pd.DataFrame(entidades_totales)
         
-        # 2. CORRECCIÓN DEL GRÁFICO: Agrupar por categoría y calcular la confianza PROMEDIO
+        # --- CORRECCIÓN Y MEJORA DEL GRÁFICO ---
         avg_confidence = df_todas_entidades.groupby('entity_group')['score'].mean().reset_index()
-        avg_confidence.columns = ['Category', 'Average Confidence']
+        avg_confidence.columns = ['Categoría', 'Confianza Promedio']
         
-        # Crear un gráfico de BARRAS, que es mejor para comparar promedios
         grafico_salida = px.bar(
             avg_confidence,
-            x='Category',
-            y='Average Confidence',
-            title='Average Confidence per Entity Category',
-            color='Category',
-            text=avg_confidence['Average Confidence'].apply(lambda x: f'{x:.2%}'),
-            range_y=[0, 1], # El eje Y va de 0 a 1 (0% a 100%)
+            x='Categoría',
+            y='Confianza Promedio',
+            title='Confianza Promedio por Categoría',
+            color='Categoría',
+            text_auto='.2%', # Formato de texto mejorado
+            range_y=[0, 1],
             color_discrete_map={'PER': '#636EFA', 'ORG': '#00CC96', 'LOC': '#EF553B', 'MISC': '#AB63FA'}
         )
-        grafico_salida.update_layout(xaxis_title="Category", yaxis_title="Average Confidence")
+        grafico_salida.update_layout(
+            template="plotly_dark", # Plantilla para tema oscuro
+            paper_bgcolor='rgba(0,0,0,0)', # Fondo transparente
+            plot_bgcolor='rgba(0,0,0,0)', # Fondo del área del gráfico transparente
+            font_color="#e5e7eb", # Color de letra del gráfico
+            xaxis_title="Categoría",
+            yaxis_title="Confianza Promedio"
+        )
+        grafico_salida.update_traces(textfont_size=14, textangle=0, textposition="outside", cliponaxis=False)
 
-        # 3. Para la lista: Agrupamos por texto y categoría, mostrando solo entidades únicas
+        # --- MEJORA DE FORMATO EN LISTAS DE ENTIDADES ---
         entidades_unicas = {}
         for entidad in entidades_totales:
             key = (entidad['word'].strip().lower(), entidad['entity_group'])
             if key not in entidades_unicas:
+                # Almacenamos el score más alto para una entidad repetida
+                entidades_unicas[key] = entidad
+            elif entidad['score'] > entidades_unicas[key]['score']:
                 entidades_unicas[key] = entidad
 
         df_unicas = pd.DataFrame(list(entidades_unicas.values()))
@@ -106,25 +114,25 @@ def encontrar_entidades(texto):
         for categoria in ['PER', 'ORG', 'LOC', 'MISC']:
             sub_df = df_unicas[df_unicas['entity_group'] == categoria]
             if not sub_df.empty:
-                # Ordena alfabéticamente para una vista limpia
-                lista_entidades = "\n".join(sorted([f"- {row['word']}" for _, row in sub_df.iterrows()]))
+                # Se usa Markdown para una lista más atractiva
+                lista_entidades = "\n".join(
+                    sorted([f"* **{row['word']}** (Confianza: {row['score']:.2%})" for _, row in sub_df.iterrows()])
+                )
                 entidades_por_categoria[categoria] = lista_entidades
             else:
-                entidades_por_categoria[categoria] = f"No entities of type '{categoria}' found."
-
-        # --- FIN DE LA LÓGICA MEJORADA ---
+                entidades_por_categoria[categoria] = f"No se encontraron entidades de tipo '{categoria}'."
 
         tokens_salida = sum(len(tokenizador.tokenize(e['word'])) for e in entidades_totales)
         confianza_promedio = sum(e['score'] for e in entidades_totales) / len(entidades_totales)
 
-        logging.info(f"Análisis completado en {tiempo_respuesta:.2f} segundos. Entidades encontradas: {len(entidades_totales)}")
+        logging.info(f"Análisis completado en {tiempo_respuesta:.2f} segundos.")
 
         resumen_metricas = (
-            f"--- Processing Metrics ---\n"
-            f"⏱️ Response Time: {tiempo_respuesta:.2f} seconds\n"
-            f"🎟️ Input Tokens: {tokens_entrada_total}\n"
-            f"🏷️ Output Tokens (Entities): {tokens_salida}\n"
-            f"🎯 Average Confidence: {confianza_promedio:.2%}\n"
+            f"--- Métricas de Procesamiento ---\n"
+            f"⏱️ Tiempo de Respuesta: {tiempo_respuesta:.2f} segundos\n"
+            f"🎟️ Tokens de Entrada: {tokens_entrada_total}\n"
+            f"🏷️ Tokens de Salida (Entidades): {tokens_salida}\n"
+            f"🎯 Confianza Promedio: {confianza_promedio:.2%}\n"
             f"----------------\n\n"
         )
         
@@ -134,54 +142,70 @@ def encontrar_entidades(texto):
 
     except Exception as e:
         logging.error(f"Ocurrió un error al procesar el texto: {e}", exc_info=True)
-        error_msg = "Error: The application encountered an unexpected problem."
+        error_msg = "Error: La aplicación encontró un problema inesperado."
         return error_msg, grafico_vacio, *salidas_vacias
 
 
 # --- 4. Creación y Lanzamiento de la Interfaz con Tema y Layout Mejorados ---
 
-# Define un tema oscuro con una fuente de estilo tecnológico y texto más visible
 theme = gr.themes.Base(
-    primary_hue=gr.themes.colors.blue,
-    secondary_hue=gr.themes.colors.purple,
+    primary_hue=gr.themes.colors.indigo,
+    secondary_hue=gr.themes.colors.blue,
     neutral_hue=gr.themes.colors.slate,
     font=[gr.themes.GoogleFont("IBM Plex Mono"), "monospace", "sans-serif"],
 ).set(
     body_background_fill="#111827",
-    body_text_color="#e5e7eb", # <-- Color de texto más claro y visible
-    button_primary_background_fill="#3b82f6",
+    body_text_color="#e5e7eb", # Color de texto más visible
+    button_primary_background_fill="#4f46e5",
     button_primary_text_color="#ffffff",
     background_fill_primary="#1f2937",
-    block_background_fill="#374151",
-    block_label_background_fill="#1f2937",
+    block_background_fill="#1f2937",
+    block_border_width="1px",
+    block_shadow="*shadow_md",
+    block_label_background_fill="*primary_700",
     block_title_text_color="*primary_500",
+    input_background_fill="#374151",
+    slider_color="*primary_500",
 )
 
-# Usamos gr.Blocks para un control total sobre el layout
-with gr.Blocks(theme=theme) as demo:
-    gr.Markdown("# Named Entity Recognition (NER) Extractor")
-    gr.Markdown("This model identifies persons (PER), organizations (ORG), locations (LOC), and other miscellaneous entities (MISC) in Spanish text.")
+# CSS para centrar el título y añadir un fondo con gradiente
+css = """
+body {
+    background-image: radial-gradient(circle at top, #1e3a8a 10%, #111827);
+    background-attachment: fixed;
+}
+#title {
+    text-align: center;
+    display: block;
+}
+"""
 
-    # Definimos un layout de dos columnas
-    with gr.Row():
-        # Columna Izquierda: Entradas y Métricas
-        with gr.Column(scale=1):
-            input_text = gr.Textbox(lines=15, placeholder="Enter or paste the text you want to analyze here...", label="Input Text")
-            submit_button = gr.Button("Analyze Text", variant="primary")
-            metrics_output = gr.Textbox(label="📊 Processing Metrics", lines=6, interactive=False)
+with gr.Blocks(theme=theme, css=css) as demo:
+    # Título centrado usando Markdown con un ID para el CSS
+    gr.Markdown("# Extractor de Entidades Nombradas (NER)", elem_id="title")
+    # Descripción en español
+    gr.Markdown("Este modelo identifica personas (PER), organizaciones (ORG), ubicaciones (LOC), y otras entidades (MISC) en texto en español. Soporta textos largos y muestra métricas detalladas.", elem_id="title")
 
-        # Columna Derecha: Salidas Visuales
+    # Layout de dos columnas
+    with gr.Row(variant='panel'):
         with gr.Column(scale=2):
-            plot_output = gr.Plot(label="📈 Average Confidence by Category")
-            
-            # Usamos un Acordeón para organizar las listas de entidades
-            with gr.Accordion("Detailed Entity Lists", open=False):
-                per_output = gr.Textbox(label="👤 Persons (PER)", interactive=False)
-                org_output = gr.Textbox(label="🏢 Organizations (ORG)", interactive=False)
-                loc_output = gr.Textbox(label="📍 Locations (LOC)", interactive=False)
-                misc_output = gr.Textbox(label="🏷️ Miscellaneous (MISC)", interactive=False)
+            input_text = gr.Textbox(lines=20, placeholder="Pega aquí el texto que quieres analizar...", label="Texto de Entrada")
+            submit_button = gr.Button("Analizar Texto", variant="primary")
+        
+        with gr.Column(scale=3):
+            plot_output = gr.Plot(label="Confianza Promedio por Categoría")
+            metrics_output = gr.Textbox(label="Métricas de Procesamiento", lines=6, interactive=False)
 
-    # Conectamos el botón a la función
+    # Acordeón para las listas de entidades detalladas
+    with gr.Accordion("Listas Detalladas de Entidades Únicas", open=False):
+        with gr.Row():
+            per_output = gr.Markdown(label="👤 Personas (PER)")
+            org_output = gr.Markdown(label="🏢 Organizaciones (ORG)")
+        with gr.Row():
+            loc_output = gr.Markdown(label="📍 Ubicaciones (LOC)")
+            misc_output = gr.Markdown(label="🏷️ Misceláneas (MISC)")
+
+    # Conectar el botón a la función
     submit_button.click(
         fn=encontrar_entidades,
         inputs=input_text,
