@@ -18,26 +18,16 @@ logging.info(f"¡Modelo '{model_id}' cargado!")
 # --- 2. Función de Ayuda para Segmentar Texto ---
 
 def segment_text(text, tokenizer, max_tokens=500):
-    """
-    Divide el texto en fragmentos que no excedan max_tokens según el tokenizador.
-    Devuelve una lista de strings (los fragmentos) y el conteo total de tokens.
-    """
     input_ids = tokenizer(text, return_tensors="pt")['input_ids'][0]
     total_tokens = len(input_ids)
     segments = []
     start = 0
-    
-    # 2. Recorre la secuencia de IDs y córtala en fragmentos
     while start < total_tokens:
         end = min(start + max_tokens, total_tokens)
         segment_ids = input_ids[start:end]
-        
-        # 3. Convierte los IDs del fragmento de vuelta a texto
         segment_text = tokenizer.decode(segment_ids, skip_special_tokens=True)
         segments.append(segment_text)
-        
         start = end
-        
     logging.info(f"Texto segmentado en {len(segments)} chunk(s) para un total de {total_tokens} tokens.")
     return segments, total_tokens
 
@@ -55,7 +45,7 @@ def encontrar_entidades(texto):
                       "🏷️ Tokens de Salida (Entidades): N/A\n" \
                       "🎯 Confianza Promedio: N/A\n" \
                       "----------------\n\n"
-    salidas_vacias = ("No se encontraron Personas.", "No se encontraron Organizaciones.", "No se encontraron Ubicaciones.", "No se encontraron Misceláneos.")
+    salidas_vacias = ("_No se encontraron Personas._", "_No se encontraron Organizaciones._", "_No se encontraron Ubicaciones._", "_No se encontraron Misceláneos._")
 
     if not texto:
         logging.warning("Se recibió una entrada de texto vacía.")
@@ -131,58 +121,65 @@ theme = gr.themes.Base(
     neutral_hue=gr.themes.colors.gray,
     font=[gr.themes.GoogleFont("IBM Plex Mono"), "monospace", "sans-serif"],
 ).set(
-    body_background_fill="#111827",
-    body_text_color="#f3f4f6", # Color de texto principal (blanco más brillante)
+    body_background_fill="#0B0F19", # Fondo principal aún más oscuro
+    body_text_color="#f3f4f6", # Color de texto principal (blanco brillante)
     button_primary_background_fill="#4f46e5",
     button_primary_text_color="#ffffff",
-    background_fill_primary="#1f2937",
-    block_background_fill="#1f2937",
+    background_fill_primary="#1E293B", # Fondo de los bloques principales
+    block_background_fill="#1E293B",
     block_border_width="0px",
-    block_label_background_fill="#111827",
-    block_label_text_color="#f3f4f6", # <-- Color de etiquetas cambiado a blanco
+    block_label_background_fill="#111827", # Fondo de etiquetas oscuro
+    block_label_text_color="#ffffff", # <-- Color de etiquetas cambiado a blanco
     input_background_fill="#374151",
 )
 
 css = """
 body {
-    background-image: radial-gradient(circle at top, #1e3a8a 10%, #111827);
+    background-image: linear-gradient(to right top, #051937, #001831, #00162a, #001323, #0b0f19);
     background-attachment: fixed;
 }
 #title { text-align: center; display: block; }
+#subtitle { text-align: center; display: block; color: #9ca3af; }
 """
 
 # Función de ayuda para limpiar todas las salidas
-def clear_outputs():
+def clear_all_outputs():
+    # Devuelve un valor vacío para cada componente de salida (5 en total)
     return None, None, None, None, None
 
 with gr.Blocks(theme=theme, css=css) as demo:
-    gr.Markdown("<h1 style='text-align: center; color: #e5e7eb;'>Named Entity Recognition (NER) Extractor</h1>", elem_id="title")
-    gr.Markdown("<p style='text-align: center;'>Este modelo identifica personas (PER), organizaciones (ORG), ubicaciones (LOC), y otras entidades (MISC) en texto en español.</p>")
+    gr.Markdown("<h1 style='color: #e5e7eb;'>Named Entity Recognition (NER) Extractor</h1>", elem_id="title")
+    gr.Markdown("<p>Este modelo identifica personas (PER), organizaciones (ORG), ubicaciones (LOC), y otras entidades (MISC) en texto en español.</p>", elem_id="subtitle")
 
+    # Layout de dos columnas
     with gr.Row(variant='panel'):
         # Columna Izquierda
-        with gr.Column(scale=1, min_width=400):
-            input_text = gr.Textbox(lines=20, placeholder="Pega aquí el texto que quieres analizar...", label="Texto de Entrada")
+        with gr.Column(scale=2, min_width=500):
+            input_text = gr.Textbox(lines=22, placeholder="Pega aquí el texto que quieres analizar...", label="Texto de Entrada")
             with gr.Row():
                 clear_button = gr.Button("Limpiar")
                 submit_button = gr.Button("Analizar Texto", variant="primary")
         
-        # Columna Derecha
-        with gr.Column(scale=1, min_width=400):
-            metrics_output = gr.Textbox(label="Métricas de Procesamiento", lines=20, interactive=False)
+        # Columna Derecha (Ahora contiene las listas de entidades)
+        with gr.Column(scale=3, min_width=700):
+            gr.Markdown("### Listas Detalladas de Entidades Únicas")
+            with gr.Row():
+                per_output = gr.Markdown(label="👤 Personas (PER)")
+                org_output = gr.Markdown(label="🏢 Organizaciones (ORG)")
+            with gr.Row():
+                loc_output = gr.Markdown(label="📍 Ubicaciones (LOC)")
+                misc_output = gr.Markdown(label="🏷️ Misceláneas (MISC)")
 
-    # Layout inferior con 4 columnas uniformes para las listas detalladas
-    gr.Markdown("### Listas Detalladas de Entidades Únicas")
+    # Bloque de Métricas separado en la parte inferior
     with gr.Row(variant='panel'):
-        per_output = gr.Markdown(label="👤 Personas (PER)")
-        org_output = gr.Markdown(label="🏢 Organizaciones (ORG)")
-        loc_output = gr.Markdown(label="📍 Ubicaciones (LOC)")
-        misc_output = gr.Markdown(label="🏷️ Misceláneas (MISC)")
+        metrics_output = gr.Textbox(label="Métricas de Procesamiento", lines=6, interactive=False)
 
     # Lógica de los botones
     outputs_list = [metrics_output, per_output, org_output, loc_output, misc_output]
     submit_button.click(fn=encontrar_entidades, inputs=input_text, outputs=outputs_list)
-    clear_button.click(fn=clear_outputs, outputs=[input_text] + outputs_list)
+    
+    # CORRECCIÓN: La función para limpiar ahora devuelve el número correcto de valores
+    clear_button.click(fn=clear_all_outputs, inputs=None, outputs=[input_text] + outputs_list)
 
 logging.info("Lanzando la interfaz de Gradio...")
 demo.launch(server_name="0.0.0.0", server_port=int(os.getenv("GRADIO_SERVER_PORT", 7860)))
