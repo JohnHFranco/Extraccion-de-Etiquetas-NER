@@ -38,20 +38,23 @@ def encontrar_entidades(texto):
     start_time = time.time()
     logging.info("Iniciando análisis de entidades...")
 
-    # Valores de salida por defecto
     metricas_vacias = "--- Processing Metrics ---\n" \
                       "⏱️ Response Time: N/A\n" \
+                      "🔠 Word Count: N/A\n" \
                       "🎟️ Input Tokens: N/A\n" \
                       "🏷️ Output Tokens (Entities): N/A\n" \
                       "🎯 Average Confidence: N/A\n" \
                       "----------------\n\n"
-    lista_vacia = "_No results._"
+    lista_vacia = "_Sin resultados._"
 
     if not texto:
         logging.warning("Se recibió una entrada de texto vacía.")
         return metricas_vacias, lista_vacia
 
+    # Contar palabras para la nueva métrica
+    conteo_palabras = len(texto.split())
     entidades_totales = []
+    
     try:
         tokenizador = ner_pipeline.tokenizer
         chunks_de_texto, tokens_entrada_total = segment_text(texto, tokenizador)
@@ -68,7 +71,6 @@ def encontrar_entidades(texto):
             logging.info("Análisis completado. No se encontraron entidades.")
             return metricas_vacias, "_No entities found in the text._"
 
-        # Agrupar entidades únicas
         entidades_unicas = {}
         for entidad in entidades_totales:
             key = (entidad['word'].strip().lower(), entidad['entity_group'])
@@ -77,14 +79,8 @@ def encontrar_entidades(texto):
 
         df_unicas = pd.DataFrame(list(entidades_unicas.values()))
         
-        # Formatear la salida en un solo bloque de texto
         texto_final_entidades = ""
-        mapeo_titulos = {
-            "PER": "Person",
-            "ORG": "Organization",
-            "LOC": "Location",
-            "MISC": "Miscellaneous"
-        }
+        mapeo_titulos = {"PER": "Person", "ORG": "Organization", "LOC": "Location", "MISC": "Miscellaneous"}
 
         for categoria, titulo in mapeo_titulos.items():
             sub_df = df_unicas[df_unicas['entity_group'] == categoria]
@@ -98,15 +94,14 @@ def encontrar_entidades(texto):
             else:
                 texto_final_entidades += f"_No entities of type '{categoria}' found._\n\n"
 
-        # Calcular métricas
         tokens_salida = sum(len(tokenizador.tokenize(e['word'])) for e in entidades_totales)
         confianza_promedio = sum(e['score'] for e in entidades_totales) / len(entidades_totales)
-
         logging.info(f"Análisis completado en {tiempo_respuesta:.2f} segundos.")
 
         resumen_metricas = (
             f"--- Processing Metrics ---\n"
             f"⏱️ Response Time: {tiempo_respuesta:.2f} seconds\n"
+            f"🔠 Word Count: {conteo_palabras}\n"  # <-- NUEVA MÉTRICA AÑADIDA
             f"🎟️ Input Tokens: {tokens_entrada_total}\n"
             f"🏷️ Output Tokens (Entities): {tokens_salida}\n"
             f"🎯 Average Confidence: {confianza_promedio:.2%}\n"
@@ -138,10 +133,11 @@ theme = gr.themes.Base(
     block_border_width="1px",
     block_shadow="*shadow_md",
     block_label_background_fill="#111827",
-    block_label_text_color="#ffffff",
+    block_label_text_color="#ffffff", # Etiquetas de bloque en blanco
     input_background_fill="#374151",
 )
 
+# CSS para el fondo y para forzar el color del texto de salida
 css = """
 body {
     background-image: radial-gradient(circle at top, #1e3a8a 10%, #111827);
@@ -149,28 +145,26 @@ body {
 }
 #title { text-align: center; display: block; }
 #subtitle { text-align: center; display: block; color: #9ca3af; margin-bottom: 20px; }
+#entity_output { color: #000000 !important; } 
+#entity_output h3 { color: #ffffff !important; } 
 """
 
 with gr.Blocks(theme=theme, css=css) as demo:
     gr.Markdown("<h1 style='color: #e5e7eb;'>Named Entity Recognition (NER) Extractor</h1>", elem_id="title")
     gr.Markdown("<p>This model identifies persons (PER), organizations (ORG), locations (LOC), and other miscellaneous entities (MISC) in Spanish text.</p>", elem_id="subtitle")
 
-    # Layout principal de dos columnas
     with gr.Row(equal_height=False):
-        # Columna Izquierda
         with gr.Column(scale=1, variant='panel'):
             input_text = gr.Textbox(lines=28, placeholder="Paste the text you want to analyze here...", label="Input Text")
             submit_button = gr.Button("Analyze Text", variant="primary")
         
-        # Columna Derecha
         with gr.Column(scale=1, variant='panel'):
-            detailed_list_output = gr.Markdown(label="Detailed Entity Lists")
+            # Se añade un ID al componente Markdown para poder aplicarle CSS
+            detailed_list_output = gr.Markdown(label="Detailed Entity Lists", elem_id="entity_output")
 
-    # Bloque de Métricas separado en la parte inferior
     with gr.Row(variant='panel'):
-        metrics_output = gr.Textbox(label="Processing Metrics", lines=6, interactive=False)
+        metrics_output = gr.Textbox(label="Processing Metrics", lines=7, interactive=False)
 
-    # Lógica del botón de análisis
     outputs_list = [metrics_output, detailed_list_output]
     submit_button.click(fn=encontrar_entidades, inputs=input_text, outputs=outputs_list)
 
