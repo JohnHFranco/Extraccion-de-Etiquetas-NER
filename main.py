@@ -133,6 +133,7 @@ theme = gr.themes.Base(
     block_border_width="1px",
     block_shadow="*shadow_md",
     block_label_background_fill="#111827",
+    block_title_text_color="#ffffff",
     block_label_text_color="#ffffff", # Etiquetas de bloque en blanco
     input_background_fill="#374151",
 )
@@ -145,8 +146,8 @@ body {
 }
 #title { text-align: center; display: block; }
 #subtitle { text-align: center; display: block; color: #9ca3af; margin-bottom: 20px; }
-#entity_output { color: #000000 !important; } 
-#entity_output h3 { color: #ffffff !important; } 
+#entity_output { color: #000000 !important; background-color: #f9fafb; padding: 1rem; border-radius: 8px;} 
+#entity_output h3 { color: #1e3a8a !important; } 
 """
 
 with gr.Blocks(theme=theme, css=css) as demo:
