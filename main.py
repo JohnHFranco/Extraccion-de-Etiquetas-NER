@@ -39,13 +39,13 @@ def encontrar_entidades(texto):
     logging.info("Iniciando análisis de entidades...")
 
     # Valores de salida por defecto
-    metricas_vacias = "--- Métricas de Procesamiento ---\n" \
-                      "⏱️ Tiempo de Respuesta: N/A\n" \
-                      "🎟️ Tokens de Entrada: N/A\n" \
-                      "🏷️ Tokens de Salida (Entidades): N/A\n" \
-                      "🎯 Confianza Promedio: N/A\n" \
+    metricas_vacias = "--- Processing Metrics ---\n" \
+                      "⏱️ Response Time: N/A\n" \
+                      "🎟️ Input Tokens: N/A\n" \
+                      "🏷️ Output Tokens (Entities): N/A\n" \
+                      "🎯 Average Confidence: N/A\n" \
                       "----------------\n\n"
-    salidas_vacias = ("_No se encontraron Personas._", "_No se encontraron Organizaciones._", "_No se encontraron Ubicaciones._", "_No se encontraron Misceláneos._")
+    salidas_vacias = ("_No Persons found._", "_No Organizations found._", "_No Locations found._", "_No Miscellaneous found._")
 
     if not texto:
         logging.warning("Se recibió una entrada de texto vacía.")
@@ -68,7 +68,7 @@ def encontrar_entidades(texto):
             logging.info("Análisis completado. No se encontraron entidades.")
             return metricas_vacias, *salidas_vacias
 
-        # Agrupar entidades únicas
+        # Agrupar entidades únicas para las listas
         entidades_unicas = {}
         for entidad in entidades_totales:
             key = (entidad['word'].strip().lower(), entidad['entity_group'])
@@ -77,18 +77,18 @@ def encontrar_entidades(texto):
 
         df_unicas = pd.DataFrame(list(entidades_unicas.values()))
         
-        # --- MEJORA DE FORMATO EN LISTAS DE ENTIDADES ---
         entidades_por_categoria = {}
         for categoria in ['PER', 'ORG', 'LOC', 'MISC']:
             sub_df = df_unicas[df_unicas['entity_group'] == categoria]
             if not sub_df.empty:
-                # Se añade la categoría a cada resultado
-                lista_entidades = "\n\n".join(
-                    sorted([f"**{row['word']}**\n(Categoría: {row['entity_group']}, Confianza: {row['score']:.1%})" for _, row in sub_df.iterrows()])
+                # Se añade la categoría a cada resultado y se ordena por confianza
+                lista_entidades = "\n".join(
+                    [f"**{row['word']}** (Confidence: {row['score']:.1%})" 
+                     for _, row in sub_df.sort_values(by='score', ascending=False).iterrows()]
                 )
                 entidades_por_categoria[categoria] = lista_entidades
             else:
-                entidades_por_categoria[categoria] = f"_No se encontraron entidades de tipo '{categoria}'._"
+                entidades_por_categoria[categoria] = f"_No entities of type '{categoria}' found._"
 
         # Calcular métricas
         tokens_salida = sum(len(tokenizador.tokenize(e['word'])) for e in entidades_totales)
@@ -97,11 +97,11 @@ def encontrar_entidades(texto):
         logging.info(f"Análisis completado en {tiempo_respuesta:.2f} segundos.")
 
         resumen_metricas = (
-            f"--- Métricas de Procesamiento ---\n"
-            f"⏱️ Tiempo de Respuesta: {tiempo_respuesta:.2f} segundos\n"
-            f"🎟️ Tokens de Entrada: {tokens_entrada_total}\n"
-            f"🏷️ Tokens de Salida (Entidades): {tokens_salida}\n"
-            f"🎯 Confianza Promedio: {confianza_promedio:.2%}\n"
+            f"--- Processing Metrics ---\n"
+            f"⏱️ Response Time: {tiempo_respuesta:.2f} seconds\n"
+            f"🎟️ Input Tokens: {tokens_entrada_total}\n"
+            f"🏷️ Output Tokens (Entities): {tokens_salida}\n"
+            f"🎯 Average Confidence: {confianza_promedio:.2%}\n"
             f"----------------\n\n"
         )
         
@@ -111,57 +111,66 @@ def encontrar_entidades(texto):
 
     except Exception as e:
         logging.error(f"Ocurrió un error al procesar el texto: {e}", exc_info=True)
-        error_msg = "Error: La aplicación encontró un problema inesperado."
+        error_msg = "Error: The application encountered an unexpected problem."
         return error_msg, *salidas_vacias
 
 
 # --- 4. Creación y Lanzamiento de la Interfaz con Tema y Layout Corregidos ---
 
-# Se usa un tema claro (Soft) como base
-theme = gr.themes.Soft(
+theme = gr.themes.Base(
     primary_hue=gr.themes.colors.indigo,
     secondary_hue=gr.themes.colors.blue,
-    font=[gr.themes.GoogleFont("Inter"), "sans-serif"],
+    neutral_hue=gr.themes.colors.slate,
+    font=[gr.themes.GoogleFont("IBM Plex Mono"), "monospace", "sans-serif"],
 ).set(
-    body_text_color="#111827", # <-- Color de texto principal cambiado a negro
+    body_background_fill="#111827",
+    body_text_color="#e5e7eb", # Color de texto principal más visible
+    button_primary_background_fill="#4f46e5",
+    button_primary_text_color="#ffffff",
+    background_fill_primary="#1f2937",
+    block_background_fill="#1f2937",
+    block_border_width="1px",
+    block_shadow="*shadow_md",
+    block_label_background_fill="#111827", # Fondo de etiquetas igual al fondo del cuerpo
+    block_label_text_color="#ffffff", # Etiquetas de bloque en blanco
+    input_background_fill="#374151",
 )
 
-# Función de ayuda para limpiar todas las salidas (CORREGIDA)
-def clear_all_outputs():
-    # Devuelve un valor vacío para cada componente de salida (5 en total)
-    return "", "", "", "", ""
+css = """
+body {
+    background-image: radial-gradient(circle at top, #1e3a8a 10%, #111827);
+    background-attachment: fixed;
+}
+#title { text-align: center; display: block; }
+#subtitle { text-align: center; display: block; color: #9ca3af; margin-bottom: 20px; }
+"""
 
-with gr.Blocks(theme=theme) as demo:
-    gr.Markdown("<h1 style='text-align: center;'>Named Entity Recognition (NER) Extractor</h1>")
-    gr.Markdown("<p style='text-align: center;'>Este modelo identifica personas (PER), organizaciones (ORG), ubicaciones (LOC), y otras entidades (MISC) en texto en español.</p>")
+with gr.Blocks(theme=theme, css=css) as demo:
+    gr.Markdown("<h1 style='color: #e5e7eb;'>Named Entity Recognition (NER) Extractor</h1>", elem_id="title")
+    gr.Markdown("<p>This model identifies persons (PER), organizations (ORG), locations (LOC), and other miscellaneous entities (MISC) in Spanish text.</p>", elem_id="subtitle")
 
-    # Layout de dos columnas
-    with gr.Row(equal_height=False):
-        # Columna Izquierda con fondo distintivo
-        with gr.Column(scale=1, variant='panel'):
-            input_text = gr.Textbox(lines=22, placeholder="Pega aquí el texto que quieres analizar...", label="Texto de Entrada")
-            with gr.Row():
-                clear_button = gr.Button("Limpiar")
-                submit_button = gr.Button("Analizar Texto", variant="primary")
-        
-        # Columna Derecha
+    # Layout principal de dos columnas
+    with gr.Row():
+        # Columna Izquierda
         with gr.Column(scale=1):
-            metrics_output = gr.Textbox(label="Métricas de Procesamiento", lines=22, interactive=False)
+            input_text = gr.Textbox(lines=25, placeholder="Paste the text you want to analyze here...", label="Input Text")
+            submit_button = gr.Button("Analyze Text", variant="primary")
+        
+        # Columna Derecha (contiene las 4 listas de entidades)
+        with gr.Column(scale=1):
+            gr.Markdown("### Detailed Entity Lists")
+            per_output = gr.Markdown(label="👤 Persons (PER)")
+            org_output = gr.Markdown(label="🏢 Organizations (ORG)")
+            loc_output = gr.Markdown(label="📍 Locations (LOC)")
+            misc_output = gr.Markdown(label="🏷️ Miscellaneous (MISC)")
 
-    # Layout inferior con 4 columnas uniformes para las listas
-    gr.Markdown("### Listas Detalladas de Entidades Únicas")
-    with gr.Row(variant='panel'):
-        per_output = gr.Markdown(label="👤 Personas (PER)")
-        org_output = gr.Markdown(label="🏢 Organizaciones (ORG)")
-        loc_output = gr.Markdown(label="📍 Ubicaciones (LOC)")
-        misc_output = gr.Markdown(label="🏷️ Misceláneas (MISC)")
+    # Bloque de Métricas separado en la parte inferior
+    with gr.Row():
+        metrics_output = gr.Textbox(label="Processing Metrics", lines=6, interactive=False)
 
-    # Lógica de los botones
+    # Lógica del botón de análisis
     outputs_list = [metrics_output, per_output, org_output, loc_output, misc_output]
     submit_button.click(fn=encontrar_entidades, inputs=input_text, outputs=outputs_list)
-    
-    # CORRECCIÓN: La función para limpiar ahora devuelve el número correcto de valores
-    clear_button.click(fn=clear_all_outputs, inputs=None, outputs=[input_text] + outputs_list)
 
 logging.info("Lanzando la interfaz de Gradio...")
 demo.launch(server_name="0.0.0.0", server_port=int(os.getenv("GRADIO_SERVER_PORT", 7860)))
