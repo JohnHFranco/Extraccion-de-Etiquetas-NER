@@ -18,16 +18,26 @@ logging.info(f"¡Modelo '{model_id}' cargado!")
 # --- 2. Función de Ayuda para Segmentar Texto ---
 
 def segment_text(text, tokenizer, max_tokens=500):
-    input_ids = tokenizer(text, return_tensors="pt").input.ids[0]
+    """
+    Divide el texto en fragmentos que no excedan max_tokens según el tokenizador.
+    Devuelve una lista de strings (los fragmentos) y el conteo total de tokens.
+    """
+    input_ids = tokenizer(text, return_tensors="pt")['input_ids'][0]
     total_tokens = len(input_ids)
     segments = []
     start = 0
+    
+    # 2. Recorre la secuencia de IDs y córtala en fragmentos
     while start < total_tokens:
         end = min(start + max_tokens, total_tokens)
         segment_ids = input_ids[start:end]
+        
+        # 3. Convierte los IDs del fragmento de vuelta a texto
         segment_text = tokenizer.decode(segment_ids, skip_special_tokens=True)
         segments.append(segment_text)
+        
         start = end
+        
     logging.info(f"Texto segmentado en {len(segments)} chunk(s) para un total de {total_tokens} tokens.")
     return segments, total_tokens
 
