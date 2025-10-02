@@ -68,7 +68,7 @@ def encontrar_entidades(texto):
             logging.info("Análisis completado. No se encontraron entidades.")
             return metricas_vacias, *salidas_vacias
 
-        # Agrupar entidades únicas para las listas
+        # Agrupar entidades únicas
         entidades_unicas = {}
         for entidad in entidades_totales:
             key = (entidad['word'].strip().lower(), entidad['entity_group'])
@@ -77,12 +77,14 @@ def encontrar_entidades(texto):
 
         df_unicas = pd.DataFrame(list(entidades_unicas.values()))
         
+        # --- MEJORA DE FORMATO EN LISTAS DE ENTIDADES ---
         entidades_por_categoria = {}
         for categoria in ['PER', 'ORG', 'LOC', 'MISC']:
             sub_df = df_unicas[df_unicas['entity_group'] == categoria]
             if not sub_df.empty:
-                lista_entidades = "\n".join(
-                    sorted([f"**{row['word']}** (Confianza: {row['score']:.1%})" for _, row in sub_df.iterrows()])
+                # Se añade la categoría a cada resultado
+                lista_entidades = "\n\n".join(
+                    sorted([f"**{row['word']}**\n(Categoría: {row['entity_group']}, Confianza: {row['score']:.1%})" for _, row in sub_df.iterrows()])
                 )
                 entidades_por_categoria[categoria] = lista_entidades
             else:
@@ -113,66 +115,46 @@ def encontrar_entidades(texto):
         return error_msg, *salidas_vacias
 
 
-# --- 4. Creación y Lanzamiento de la Interfaz con Tema y Layout Mejorados ---
+# --- 4. Creación y Lanzamiento de la Interfaz con Tema y Layout Corregidos ---
 
-theme = gr.themes.Base(
+# Se usa un tema claro (Soft) como base
+theme = gr.themes.Soft(
     primary_hue=gr.themes.colors.indigo,
     secondary_hue=gr.themes.colors.blue,
-    neutral_hue=gr.themes.colors.gray,
-    font=[gr.themes.GoogleFont("IBM Plex Mono"), "monospace", "sans-serif"],
+    font=[gr.themes.GoogleFont("Inter"), "sans-serif"],
 ).set(
-    body_background_fill="#0B0F19", # Fondo principal aún más oscuro
-    body_text_color="#f3f4f6", # Color de texto principal (blanco brillante)
-    button_primary_background_fill="#4f46e5",
-    button_primary_text_color="#ffffff",
-    background_fill_primary="#1E293B", # Fondo de los bloques principales
-    block_background_fill="#1E293B",
-    block_border_width="0px",
-    block_label_background_fill="#111827", # Fondo de etiquetas oscuro
-    block_label_text_color="#ffffff", # <-- Color de etiquetas cambiado a blanco
-    input_background_fill="#374151",
+    body_text_color="#111827", # <-- Color de texto principal cambiado a negro
 )
 
-css = """
-body {
-    background-image: linear-gradient(to right top, #051937, #001831, #00162a, #001323, #0b0f19);
-    background-attachment: fixed;
-}
-#title { text-align: center; display: block; }
-#subtitle { text-align: center; display: block; color: #9ca3af; }
-"""
-
-# Función de ayuda para limpiar todas las salidas
+# Función de ayuda para limpiar todas las salidas (CORREGIDA)
 def clear_all_outputs():
     # Devuelve un valor vacío para cada componente de salida (5 en total)
-    return None, None, None, None, None
+    return "", "", "", "", ""
 
-with gr.Blocks(theme=theme, css=css) as demo:
-    gr.Markdown("<h1 style='color: #e5e7eb;'>Named Entity Recognition (NER) Extractor</h1>", elem_id="title")
-    gr.Markdown("<p>Este modelo identifica personas (PER), organizaciones (ORG), ubicaciones (LOC), y otras entidades (MISC) en texto en español.</p>", elem_id="subtitle")
+with gr.Blocks(theme=theme) as demo:
+    gr.Markdown("<h1 style='text-align: center;'>Named Entity Recognition (NER) Extractor</h1>")
+    gr.Markdown("<p style='text-align: center;'>Este modelo identifica personas (PER), organizaciones (ORG), ubicaciones (LOC), y otras entidades (MISC) en texto en español.</p>")
 
     # Layout de dos columnas
-    with gr.Row(variant='panel'):
-        # Columna Izquierda
-        with gr.Column(scale=2, min_width=500):
+    with gr.Row(equal_height=False):
+        # Columna Izquierda con fondo distintivo
+        with gr.Column(scale=1, variant='panel'):
             input_text = gr.Textbox(lines=22, placeholder="Pega aquí el texto que quieres analizar...", label="Texto de Entrada")
             with gr.Row():
                 clear_button = gr.Button("Limpiar")
                 submit_button = gr.Button("Analizar Texto", variant="primary")
         
-        # Columna Derecha (Ahora contiene las listas de entidades)
-        with gr.Column(scale=3, min_width=700):
-            gr.Markdown("### Listas Detalladas de Entidades Únicas")
-            with gr.Row():
-                per_output = gr.Markdown(label="👤 Personas (PER)")
-                org_output = gr.Markdown(label="🏢 Organizaciones (ORG)")
-            with gr.Row():
-                loc_output = gr.Markdown(label="📍 Ubicaciones (LOC)")
-                misc_output = gr.Markdown(label="🏷️ Misceláneas (MISC)")
+        # Columna Derecha
+        with gr.Column(scale=1):
+            metrics_output = gr.Textbox(label="Métricas de Procesamiento", lines=22, interactive=False)
 
-    # Bloque de Métricas separado en la parte inferior
+    # Layout inferior con 4 columnas uniformes para las listas
+    gr.Markdown("### Listas Detalladas de Entidades Únicas")
     with gr.Row(variant='panel'):
-        metrics_output = gr.Textbox(label="Métricas de Procesamiento", lines=6, interactive=False)
+        per_output = gr.Markdown(label="👤 Personas (PER)")
+        org_output = gr.Markdown(label="🏢 Organizaciones (ORG)")
+        loc_output = gr.Markdown(label="📍 Ubicaciones (LOC)")
+        misc_output = gr.Markdown(label="🏷️ Misceláneas (MISC)")
 
     # Lógica de los botones
     outputs_list = [metrics_output, per_output, org_output, loc_output, misc_output]
