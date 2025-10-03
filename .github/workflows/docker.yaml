@@ -19,20 +19,6 @@ jobs:
       - name: Clonar el repositorio
         uses: actions/checkout@v4
 
-      - name: Limpiar espacio en disco del Runner
-        run: |
-          echo "Espacio en disco ANTES de la limpieza:"
-          df -h
-          # Eliminar herramientas y SDKs pesados que no se usan en este proyecto
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          # Limpiar la caché de Docker
-          docker system prune -af
-          echo "Espacio en disco DESPUÉS de la limpieza:"
-          df -h
-
       # 4. INICIAR SESIÓN: Conéctate a Docker Hub usando los secrets de GitHub
       - name: Iniciar sesión en Docker Hub
         uses: docker/login-action@v3
