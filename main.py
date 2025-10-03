@@ -51,7 +51,6 @@ def encontrar_entidades(texto):
         logging.warning("Se recibió una entrada de texto vacía.")
         return metricas_vacias, lista_vacia
 
-    # Contar palabras para la nueva métrica
     conteo_palabras = len(texto.split())
     entidades_totales = []
     
@@ -101,7 +100,7 @@ def encontrar_entidades(texto):
         resumen_metricas = (
             f"--- Processing Metrics ---\n"
             f"⏱️ Response Time: {tiempo_respuesta:.2f} seconds\n"
-            f"🔠 Word Count: {conteo_palabras}\n"  # <-- NUEVA MÉTRICA AÑADIDA
+            f"🔠 Word Count: {conteo_palabras}\n"
             f"🎟️ Input Tokens: {tokens_entrada_total}\n"
             f"🏷️ Output Tokens (Entities): {tokens_salida}\n"
             f"🎯 Average Confidence: {confianza_promedio:.2%}\n"
@@ -118,6 +117,7 @@ def encontrar_entidades(texto):
 
 # --- 4. Creación y Lanzamiento de la Interfaz con Tema y Layout Corregidos ---
 
+# Se mantiene el tema oscuro para toda la aplicación
 theme = gr.themes.Base(
     primary_hue=gr.themes.colors.indigo,
     secondary_hue=gr.themes.colors.blue,
@@ -133,12 +133,12 @@ theme = gr.themes.Base(
     block_border_width="1px",
     block_shadow="*shadow_md",
     block_label_background_fill="#111827",
-    block_title_text_color="#ffffff",
-    block_label_text_color="#ffffff", # Etiquetas de bloque en blanco
+    block_label_text_color="#ffffff",
     input_background_fill="#374151",
 )
 
-# CSS para el fondo y para forzar el color del texto de salida
+# --- CORRECCIÓN CON CSS ---
+# CSS para el fondo y para aplicar el estilo específico al cuadro de salida
 css = """
 body {
     background-image: radial-gradient(circle at top, #1e3a8a 10%, #111827);
@@ -146,8 +146,17 @@ body {
 }
 #title { text-align: center; display: block; }
 #subtitle { text-align: center; display: block; color: #9ca3af; margin-bottom: 20px; }
-#entity_output { color: #000000 !important; background-color: #f9fafb; padding: 1rem; border-radius: 8px;} 
-#entity_output h3 { color: #1e3a8a !important; } 
+
+/* Estilos específicos para el bloque de resultados */
+#entity_output {
+    color: #000000 !important; /* Letra negra */
+    background-color: #f9fafb !important; /* Fondo blanco */
+    padding: 1rem;
+    border-radius: 8px;
+}
+#entity_output h3 { /* Estilo para los títulos (Person, Organization, etc.) */
+    color: #1e3a8a !important; /* Títulos en azul oscuro */
+}
 """
 
 with gr.Blocks(theme=theme, css=css) as demo:
@@ -160,7 +169,7 @@ with gr.Blocks(theme=theme, css=css) as demo:
             submit_button = gr.Button("Analyze Text", variant="primary")
         
         with gr.Column(scale=1, variant='panel'):
-            # Se añade un ID al componente Markdown para poder aplicarle CSS
+            # Se añade un ID a este componente para que el CSS pueda seleccionarlo
             detailed_list_output = gr.Markdown(label="Detailed Entity Lists", elem_id="entity_output")
 
     with gr.Row(variant='panel'):
